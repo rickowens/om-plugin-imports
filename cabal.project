@@ -1,0 +1,6 @@
+packages:
+  "."
+package om-plugin-imports
+  ghc-options:
+    -Werror
+
