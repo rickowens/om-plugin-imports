@@ -1,0 +1,51 @@
+cabal-version:       3.0
+name:                om-plugin-imports
+version:             0.1.0.0
+synopsis:            Plugin-based import warnings
+description:         This is a plutin that acts similar to
+                     `-Wmissing-import-lists`, except that it will inform you
+                     how to fix the problem.
+homepage:            https://github.com/owensmurray/om-plugin-imports
+license:             MIT
+license-file:        LICENSE
+author:              Rick Owens
+maintainer:          rick@owensmurray.com
+copyright:           2022 Rick Owens
+category:            Compiler Plugin
+build-type:          Simple
+extra-source-files:
+  README.md
+  LICENSE
+
+common dependencies
+  build-depends:
+    , base       >= 4.15    && < 4.16
+    , containers >= 0.6.4.1 && < 0.7
+    , ghc        >= 9.0.2   && < 9.1
+
+common warnings
+  ghc-options:
+    -Wall
+    -Wmissing-deriving-strategies
+    -Wmissing-export-lists
+    -Wmissing-import-lists
+    -Wredundant-constraints
+
+library
+  import: dependencies, warnings
+  exposed-modules:     
+    OM.Plugin.Imports
+  -- other-modules:       
+  -- other-extensions:    
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable om-import-warnings-test
+  import: dependencies
+  main-is: test.hs
+  hs-source-dirs: app
+  default-language:    Haskell2010
+  build-depends:
+    , om-plugin-imports
+
+
