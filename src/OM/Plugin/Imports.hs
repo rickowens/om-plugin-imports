@@ -11,31 +11,30 @@ module OM.Plugin.Imports (
 ) where
 
 
-import Control.Monad.IO.Class (MonadIO)
-import Data.IORef (modifyIORef, readIORef)
+import Control.Monad (void)
+import Data.IORef (readIORef)
 import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Set (Set)
-import GHC.Data.Bag (consBag)
-import GHC.Data.IOEnv (IOEnv, getEnv)
-import GHC.Hs (IE(IEThingAll), ImportDecl(ideclHiding, ideclImplicit,
-  ideclQualified), ImportDeclQualifiedStyle(NotQualified), GhcRn)
-import GHC.Plugins (DynFlags(dumpDir), GenLocated(L),
-  GenModule(moduleName), GlobalRdrElt(GRE, gre_imp, gre_name,
-  gre_par), HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as,
-  is_mod, is_qual), ImportSpec(is_decl), ImportedBy(ImportedByUser),
-  ImportedModsVal(imv_all_exports), Outputable(ppr), Parent(FldParent,
-  NoParent, ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
-  PluginRecompile(NoForceRecompile), ($+$), CommandLineOption, Located,
-  ModSummary, ModuleName, Name, bestImport, defaultPlugin, empty, getLoc,
-  liftIO, moduleEnvToList, moduleNameString, neverQualify, occEnvElts,
-  ppWhen, showSDoc, text)
-import GHC.Tc.Types (Env(env_lcl), ImportAvails(imp_mods),
-  TcGblEnv(tcg_imports, tcg_mod, tcg_rn_imports, tcg_used_gres),
-  TcLclEnv(tcl_errs), TcM)
-import GHC.Utils.Error (ErrMsg, mkLongErrMsg)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import GHC (DynFlags(dumpDir), GenLocated(L), IE(IEThingAll),
+  ImportDecl(ideclHiding, ideclImplicit, ideclQualified),
+  ImportDeclQualifiedStyle(NotQualified), GhcRn, LImportDecl, ModSummary,
+  ModuleName, Name, moduleName, moduleNameString)
+import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
+  HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
+  is_qual), ImportSpec(is_decl), Outputable(ppr), Parent(NoParent,
+  ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
+  PluginRecompile(NoForceRecompile), CommandLineOption, bestImport,
+  defaultPlugin, liftIO, moduleEnvToList, occEnvElts, showSDoc)
+import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
+  tcg_mod, tcg_rn_imports, tcg_used_gres), MonadIO, TcM)
+import GHC.Types.Avail (greNamePrintableName)
+import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
+  ImportedModsVal(imv_all_exports))
+import qualified Data.Map as Map (findWithDefault, singleton, toAscList,
+  toList, unionWith, unionsWith)
+import qualified Data.Set as Set (member, null, singleton, toAscList,
+  union)
 
 
 plugin :: Plugin
@@ -50,50 +49,11 @@ typeCheckResultActionImpl
   -> ModSummary
   -> TcGblEnv
   -> TcM TcGblEnv
-typeCheckResultActionImpl options _ env = do
+typeCheckResultActionImpl _ _ env = do
   used <- getUsedImports env
   flags <- getDynFlags
-  file <-
-    writeToDumpFile env flags used
-  sequence_
-    [ addMessage (getSeverity options) $
-        mkLongErrMsg
-          flags
-          (getLoc decl)
-          neverQualify
-          "There is at least one missing import list."
-          (ppWhen True $
-            text "For brevity, we only report the first such error per module."
-            $+$
-              text
-                (
-                  "To fix all such errors, try replacing the entire import "
-                  <> "list with:"
-                )
-            $+$ text ""
-            $+$ foldl ($+$) empty (text <$> lines (renderNewImports flags used))
-            $+$ text ""
-            $+$
-              (
-                case file of
-                  Nothing -> empty
-                  Just f ->
-                    text $ "(which has also been written to " <> f <> "):"
-              )
-          )
-    | decl <- take 1 (badImports env)
-    ]
+  void $ writeToDumpFile env flags used
   pure env
-
-
-data Severity
-  = Warning
-  | Error
-
-
-getSeverity :: [CommandLineOption] -> Severity
-getSeverity options =
-  if "error" `elem` options then Error else Warning
 
 
 writeToDumpFile
@@ -122,8 +82,8 @@ writeToDumpFile env flags used =
         pure (Just filename) 
 
 
-badImports :: TcGblEnv -> [Located (ImportDecl GhcRn)]
-badImports env =
+_badImports :: TcGblEnv -> [LImportDecl GhcRn]
+_badImports env =
   [ decl
   | decl <- tcg_rn_imports env
   , case ideclHiding (unL decl) of
@@ -162,7 +122,9 @@ getUsedImports env = do
     availableParents =
       Map.unionsWith
         Set.union
-        [ Map.singleton (moduleName m) (Set.singleton name)
+        [ Map.singleton
+            (moduleName m)
+            (Set.singleton (greNamePrintableName name))
         | (m, ibs)
             <- moduleEnvToList . imp_mods . tcg_imports $ env
         , ImportedByUser imv <- ibs
@@ -217,14 +179,17 @@ getUsedImports env = do
                 in
                   case parent of
                     NoParent -> noParent
-                    ParentIs parentName -> withPossibleParent parentName
-                    FldParent parentName _ -> withPossibleParent parentName
+                    ParentIs parentName ->
+                      withPossibleParent parentName
               )
         | GRE
-            { gre_name = name
+            { gre_name
             , gre_par = parent
             , gre_imp = imps
             } <- rawUsed
+        , let
+            name :: Name
+            name = greNamePrintableName gre_name
         ]
   pure used
 
@@ -235,7 +200,10 @@ data ModuleImport
   | QualifiedAs ModuleName ModuleName
   deriving stock (Eq, Ord)
 
-renderNewImports :: DynFlags -> Map ModuleImport (Map Name (Set Name)) -> String
+renderNewImports
+  :: DynFlags
+  -> Map ModuleImport (Map Name (Set Name))
+  -> String
 renderNewImports flags used =
     unlines
       [
@@ -265,19 +233,6 @@ renderNewImports flags used =
 
     shown :: Outputable o => o -> String
     shown = showSDoc flags . ppr
-
-
-addMessage :: Severity -> ErrMsg -> IOEnv (Env gbl TcLclEnv) ()
-addMessage severity msg = do
-  errors <- tcl_errs . env_lcl <$> getEnv
-  liftIO $
-    modifyIORef
-      errors
-      (\(warnings, errs) ->
-        case severity of
-          Error -> (warnings, consBag msg errs)
-          Warning -> (consBag msg warnings, errs)
-      )
 
 
 unL :: GenLocated l e -> e
