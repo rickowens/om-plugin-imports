@@ -162,7 +162,9 @@ getUsedImports env = do
     availableParents =
       Map.unionsWith
         Set.union
-        [ Map.singleton (moduleName m) (Set.singleton name)
+        [ Map.singleton
+            (moduleName m)
+            (Set.singleton name)
         | (m, ibs)
             <- moduleEnvToList . imp_mods . tcg_imports $ env
         , ImportedByUser imv <- ibs
@@ -217,7 +219,8 @@ getUsedImports env = do
                 in
                   case parent of
                     NoParent -> noParent
-                    ParentIs parentName -> withPossibleParent parentName
+                    ParentIs parentName ->
+                      withPossibleParent parentName
                     FldParent parentName _ -> withPossibleParent parentName
               )
         | GRE
@@ -235,7 +238,10 @@ data ModuleImport
   | QualifiedAs ModuleName ModuleName
   deriving stock (Eq, Ord)
 
-renderNewImports :: DynFlags -> Map ModuleImport (Map Name (Set Name)) -> String
+renderNewImports
+  :: DynFlags
+  -> Map ModuleImport (Map Name (Set Name))
+  -> String
 renderNewImports flags used =
     unlines
       [
