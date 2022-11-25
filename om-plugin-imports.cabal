@@ -27,9 +27,9 @@ extra-source-files:
 
 common dependencies
   build-depends:
-    , base       >= 4.15    && < 4.16
+    , base       >= 4.16    && < 4.17
     , containers >= 0.6.4.1 && < 0.7
-    , ghc        >= 9.0.2   && < 9.1
+    , ghc        >= 9.2.0   && < 9.3
 
 common warnings
   ghc-options:

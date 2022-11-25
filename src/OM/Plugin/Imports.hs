@@ -12,22 +12,23 @@ module OM.Plugin.Imports (
 
 
 import Control.Monad (void)
-import Control.Monad.IO.Class (MonadIO)
 import Data.IORef (readIORef)
 import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Set (Set)
-import GHC.Plugins (DynFlags(dumpDir), GenModule(moduleName),
-  GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
-  HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as,
-  is_mod, is_qual), ImportSpec(is_decl), ImportedBy(ImportedByUser),
-  ImportedModsVal(imv_all_exports), Outputable(ppr), Parent(FldParent,
-  NoParent, ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
-  PluginRecompile(NoForceRecompile), CommandLineOption, ModSummary,
-  ModuleName, Name, bestImport, defaultPlugin, liftIO, moduleEnvToList,
-  moduleNameString, occEnvElts, showSDoc)
-import GHC.Tc.Types (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
-  tcg_mod, tcg_used_gres), TcM)
+import GHC (DynFlags(dumpDir), ModSummary, ModuleName, Name, moduleName,
+  moduleNameString)
+import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
+  HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
+  is_qual), ImportSpec(is_decl), Outputable(ppr), Parent(NoParent,
+  ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
+  PluginRecompile(NoForceRecompile), CommandLineOption, bestImport,
+  defaultPlugin, liftIO, moduleEnvToList, occEnvElts, showSDoc)
+import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
+  tcg_mod, tcg_used_gres), MonadIO, TcM)
+import GHC.Types.Avail (greNamePrintableName)
+import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
+  ImportedModsVal(imv_all_exports))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
@@ -99,7 +100,7 @@ getUsedImports env = do
         Set.union
         [ Map.singleton
             (moduleName m)
-            (Set.singleton name)
+            (Set.singleton (greNamePrintableName name))
         | (m, ibs)
             <- moduleEnvToList . imp_mods . tcg_imports $ env
         , ImportedByUser imv <- ibs
@@ -156,13 +157,15 @@ getUsedImports env = do
                     NoParent -> noParent
                     ParentIs parentName ->
                       withPossibleParent parentName
-                    FldParent parentName _ -> withPossibleParent parentName
               )
         | GRE
-            { gre_name = name
+            { gre_name
             , gre_par = parent
             , gre_imp = imps
             } <- rawUsed
+        , let
+            name :: Name
+            name = greNamePrintableName gre_name
         ]
   pure used
 
