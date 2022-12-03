@@ -18,12 +18,13 @@ import Data.Map (Map)
 import Data.Set (Set)
 import GHC (DynFlags(dumpDir), ModSummary, ModuleName, Name, moduleName,
   moduleNameString)
+import GHC.Data.Bag (bagToList)
 import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
   HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
   is_qual), ImportSpec(is_decl), Outputable(ppr), Parent(NoParent,
   ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
   PluginRecompile(NoForceRecompile), CommandLineOption, bestImport,
-  defaultPlugin, liftIO, moduleEnvToList, occEnvElts, showSDoc)
+  defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts, showSDoc)
 import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
   tcg_mod, tcg_used_gres), MonadIO, TcM)
 import GHC.Types.Avail (greNamePrintableName)
@@ -104,7 +105,7 @@ getUsedImports env = do
         | (m, ibs)
             <- moduleEnvToList . imp_mods . tcg_imports $ env
         , ImportedByUser imv <- ibs
-        , GRE { gre_name = name } <- concat . occEnvElts . imv_all_exports $ imv
+        , GRE { gre_name = name } <- concat . nonDetOccEnvElts . imv_all_exports $ imv
         ]
 
     used :: Map ModuleImport (Map Name (Set Name))
@@ -113,7 +114,7 @@ getUsedImports env = do
         (Map.unionWith Set.union)
         [ let
             imp :: ImportSpec
-            imp = bestImport imps
+            imp = bestImport (bagToList imps)
 
             modName :: ModuleName
             modImport :: ModuleImport
