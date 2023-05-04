@@ -30,6 +30,8 @@ import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
 import GHC.Types.Avail (greNamePrintableName)
 import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
   ImportedModsVal(imv_all_exports))
+import Safe (headMay)
+import qualified Data.Char as Char
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
@@ -209,6 +211,12 @@ renderNewImports flags used =
         "(" <> intercalate ", " (shown <$> Set.toAscList children) <> ")"
 
     shown :: Outputable o => o -> String
-    shown = showSDoc flags . ppr
+    shown = fixInlineName . showSDoc flags . ppr
 
-
+    fixInlineName :: String -> String
+    fixInlineName name =
+      case headMay name of
+        Nothing -> name
+        Just c
+          | Char.isAlphaNum c || c == '_' -> name
+          | otherwise -> "(" <> name <> ")"
