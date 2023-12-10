@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {- | Description: Plugin for helping close open imports. -}
 module OM.Plugin.Imports (
@@ -19,19 +20,20 @@ import Data.Set (Set)
 import GHC (DynFlags(dumpDir), ModSummary, ModuleName, Name, moduleName,
   moduleNameString)
 import GHC.Data.Bag (bagToList)
-import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
+import GHC.Plugins (GlobalRdrEltX(GRE, gre_imp, gre_name, gre_par),
   HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
   is_qual), ImportSpec(is_decl), Outputable(ppr), Parent(NoParent,
   ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
-  PluginRecompile(NoForceRecompile), CommandLineOption, bestImport,
-  defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts, showSDoc)
+  PluginRecompile(NoForceRecompile), CommandLineOption, GlobalRdrElt,
+  bestImport, defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts,
+  showSDoc)
 import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
   tcg_mod, tcg_used_gres), MonadIO, TcM)
-import GHC.Types.Avail (greNamePrintableName)
 import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
   ImportedModsVal(imv_all_exports))
 import Safe (headMay)
 import qualified Data.Char as Char
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
@@ -71,14 +73,14 @@ writeToDumpFile env flags used =
     Nothing -> pure Nothing
     Just dir ->
       liftIO $ do
-        let 
+        let
           modName :: FilePath
           modName = moduleNameString . moduleName . tcg_mod $ env
 
           filename :: FilePath
           filename = dir <> "/" <> modName <> ".full-imports"
         writeFile filename (renderNewImports flags used)
-        pure (Just filename) 
+        pure (Just filename)
 
 
 getUsedImports
@@ -103,7 +105,7 @@ getUsedImports env = do
         Set.union
         [ Map.singleton
             (moduleName m)
-            (Set.singleton (greNamePrintableName name))
+            (Set.singleton name)
         | (m, ibs)
             <- moduleEnvToList . imp_mods . tcg_imports $ env
         , ImportedByUser imv <- ibs
@@ -116,13 +118,18 @@ getUsedImports env = do
         (Map.unionWith Set.union)
         [ let
             imp :: ImportSpec
-            imp = bestImport (bagToList imps)
+            imp = bestImport (NonEmpty.fromList (bagToList imps))
 
             modName :: ModuleName
             modImport :: ModuleImport
             (modImport, modName) =
               let
-                ImpDeclSpec { is_mod , is_as , is_qual } = is_decl imp
+                ImpDeclSpec
+                    { is_mod = moduleName -> is_mod
+                    , is_as
+                    , is_qual
+                    }
+                  = is_decl imp
               in
                 ( case (is_qual, is_as == is_mod) of
                     (True, True) -> Qualified is_mod
@@ -168,7 +175,7 @@ getUsedImports env = do
             } <- rawUsed
         , let
             name :: Name
-            name = greNamePrintableName gre_name
+            name = gre_name
         ]
   pure used
 
