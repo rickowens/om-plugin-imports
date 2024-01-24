@@ -16,8 +16,8 @@ import Data.IORef (readIORef)
 import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Set (Set)
-import GHC (DynFlags(dumpDir), ModSummary, ModuleName, Name, moduleName,
-  moduleNameString)
+import GHC (ModSummary(ms_hspp_file), DynFlags, ModuleName, Name,
+  moduleName)
 import GHC.Data.Bag (bagToList)
 import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
   HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
@@ -26,10 +26,14 @@ import GHC.Plugins (GlobalRdrElt(GRE, gre_imp, gre_name, gre_par),
   PluginRecompile(NoForceRecompile), CommandLineOption, bestImport,
   defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts, showSDoc)
 import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
-  tcg_mod, tcg_used_gres), MonadIO, TcM)
+  tcg_used_gres), MonadIO, TcM)
 import GHC.Types.Avail (greNamePrintableName)
 import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
   ImportedModsVal(imv_all_exports))
+import Prelude (Applicative(pure), Bool(False, True), Eq((==)),
+  Maybe(Just, Nothing), Monoid(mempty), Semigroup((<>)), ($), (.),
+  (<$>), (||), FilePath, Ord, String, concat, otherwise, putStrLn,
+  unlines, writeFile)
 import Safe (headMay)
 import qualified Data.Char as Char
 import qualified Data.Map as Map
@@ -48,37 +52,27 @@ typeCheckResultActionImpl
   -> ModSummary
   -> TcGblEnv
   -> TcM TcGblEnv
-typeCheckResultActionImpl _ _ env = do
+typeCheckResultActionImpl _ modSummary env = do
+  liftIO (putStrLn (ms_hspp_file modSummary))
   used <- getUsedImports env
   flags <- getDynFlags
-  void $ writeToDumpFile env flags used
+  void $ writeToDumpFile (ms_hspp_file modSummary) flags used
   pure env
 
 
 writeToDumpFile
   :: (MonadIO m)
-  => TcGblEnv
+  => FilePath
   -> DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> m (Maybe FilePath)
-writeToDumpFile env flags used =
-  {-
-    If `-dumpdir` has been specified, then write the output into
-    the dumpdir.  Mainly this  is because I can't figure out how to
-    programmatically find the default dump dir.
-  -}
-  case dumpDir flags of
-    Nothing -> pure Nothing
-    Just dir ->
-      liftIO $ do
-        let 
-          modName :: FilePath
-          modName = moduleNameString . moduleName . tcg_mod $ env
-
-          filename :: FilePath
-          filename = dir <> "/" <> modName <> ".full-imports"
-        writeFile filename (renderNewImports flags used)
-        pure (Just filename) 
+writeToDumpFile srcFile flags used =
+  liftIO $ do
+    let
+      filename :: FilePath
+      filename = srcFile <> ".full-imports"
+    writeFile filename (renderNewImports flags used)
+    pure (Just filename)
 
 
 getUsedImports
