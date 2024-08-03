@@ -15,7 +15,7 @@ import Control.Monad (void)
 import Data.IORef (readIORef)
 import Data.List (intercalate)
 import Data.Map (Map)
-import Data.Set (Set)
+import Data.Set (Set, member)
 import GHC (ModSummary(ms_hspp_file), DynFlags, ModuleName, Name, moduleName)
 import GHC.Data.Bag (bagToList)
 import GHC.Plugins
@@ -35,8 +35,8 @@ import GHC.Unit.Module.Imported
   )
 import Prelude
   ( Applicative(pure), Bool(False, True), Eq((==)), Maybe(Just, Nothing)
-  , Monoid(mempty), Semigroup((<>)), ($), (.), (<$>), (||), FilePath, Ord
-  , String, concat, otherwise, putStrLn, unlines, writeFile
+  , Monoid(mempty), Num((+)), Ord((>)), Semigroup((<>)), ($), (.), (<$>), (||)
+  , FilePath, Int, String, concat, otherwise, putStrLn, unlines, writeFile
   )
 import Safe (headMay)
 import qualified Data.Char as Char
@@ -189,12 +189,32 @@ renderNewImports flags used =
             "import " <> shown modName <> " (" <> showParents parents <> ")"
           Qualified modName ->
             "import qualified " <> shown modName
+            <> showListIfAmbiguous modName parents
           QualifiedAs modName asName ->
             "import qualified "
             <> shown modName <> " as " <> shown asName
+            <> showListIfAmbiguous asName parents
       | (modImport, parents) <- Map.toAscList used
       ]
   where
+    showListIfAmbiguous :: ModuleName -> Map Name (Set Name) -> String
+    showListIfAmbiguous modName parents =
+      if modName `member` ambiguousNames
+        then " (" <> showParents parents <> ")"
+        else ""
+
+    ambiguousNames :: Set ModuleName
+    ambiguousNames =
+      Map.keysSet
+      . Map.filter (> 1)
+      . Map.unionsWith (+)
+      $ [ case modImport of
+            Unqualified name -> Map.singleton name (1 :: Int)
+            Qualified name -> Map.singleton name 1
+            QualifiedAs _ name -> Map.singleton name 1
+        | (modImport, _) <- Map.toAscList used
+        ]
+
     showParents :: Map Name (Set Name) -> String
     showParents parents =
       intercalate ", "
