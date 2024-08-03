@@ -17,24 +17,28 @@ import Data.IORef (readIORef)
 import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Set (Set)
-import GHC (ModSummary(ms_hspp_file), DynFlags, ModuleName, Name,
-  moduleName)
+import GHC (ModSummary(ms_hspp_file), DynFlags, ModuleName, Name, moduleName)
 import GHC.Data.Bag (bagToList)
-import GHC.Plugins (GlobalRdrEltX(GRE, gre_imp, gre_name, gre_par),
-  HasDynFlags(getDynFlags), ImpDeclSpec(ImpDeclSpec, is_as, is_mod,
-  is_qual), ImportSpec(is_decl), Outputable(ppr), Parent(NoParent,
-  ParentIs), Plugin(pluginRecompile, typeCheckResultAction),
-  PluginRecompile(NoForceRecompile), CommandLineOption, GlobalRdrElt,
-  bestImport, defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts,
-  showSDoc)
-import GHC.Tc.Utils.Monad (ImportAvails(imp_mods), TcGblEnv(tcg_imports,
-  tcg_used_gres), MonadIO, TcM)
-import GHC.Unit.Module.Imported (ImportedBy(ImportedByUser),
-  ImportedModsVal(imv_all_exports))
-import Prelude (Applicative(pure), Bool(False, True), Eq((==)),
-  Maybe(Just, Nothing), Monoid(mempty), Semigroup((<>)), ($), (.),
-  (<$>), (||), FilePath, Ord, String, concat, otherwise, putStrLn,
-  unlines, writeFile)
+import GHC.Plugins
+  ( GlobalRdrEltX(GRE, gre_imp, gre_name, gre_par), HasDynFlags(getDynFlags)
+  , ImpDeclSpec(ImpDeclSpec, is_as, is_mod, is_qual), ImportSpec(is_decl)
+  , Outputable(ppr), Parent(NoParent, ParentIs)
+  , Plugin(pluginRecompile, typeCheckResultAction)
+  , PluginRecompile(NoForceRecompile), CommandLineOption, GlobalRdrElt
+  , bestImport, defaultPlugin, liftIO, moduleEnvToList, nonDetOccEnvElts
+  , showSDoc
+  )
+import GHC.Tc.Utils.Monad
+  ( ImportAvails(imp_mods), TcGblEnv(tcg_imports, tcg_used_gres), MonadIO, TcM
+  )
+import GHC.Unit.Module.Imported
+  ( ImportedBy(ImportedByUser), ImportedModsVal(imv_all_exports)
+  )
+import Prelude
+  ( Applicative(pure), Bool(False, True), Eq((==)), Maybe(Just, Nothing)
+  , Monoid(mempty), Semigroup((<>)), ($), (.), (<$>), (||), FilePath, Ord
+  , String, concat, otherwise, putStrLn, unlines, writeFile
+  )
 import Safe (headMay)
 import qualified Data.Char as Char
 import qualified Data.List.NonEmpty as NonEmpty
@@ -193,7 +197,8 @@ renderNewImports flags used =
           Qualified modName ->
             "import qualified " <> shown modName
           QualifiedAs modName asName ->
-            "import qualified " <> shown modName <> " as " <> shown asName
+            "import qualified "
+            <> shown modName <> " as " <> shown asName
       | (modImport, parents) <- Map.toAscList used
       ]
   where
