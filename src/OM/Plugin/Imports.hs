@@ -59,7 +59,7 @@ typeCheckResultActionImpl
   -> TcGblEnv
   -> TcM TcGblEnv
 typeCheckResultActionImpl _ modSummary env = do
-  liftIO (putStrLn (ms_hspp_file modSummary))
+  liftIO (putStrLn ("Generating imports for file: " <> ms_hspp_file modSummary))
   used <- getUsedImports env
   flags <- getDynFlags
   void $ writeToDumpFile (ms_hspp_file modSummary) flags used
