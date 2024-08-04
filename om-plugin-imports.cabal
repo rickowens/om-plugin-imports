@@ -17,9 +17,9 @@ extra-source-files:
 
 common dependencies
   build-depends:
-    , base       >= 4.19.0.0 && < 4.20
-    , containers >= 0.6.8    && < 0.7
-    , ghc        >= 9.8.1    && < 9.9
+    , base       >= 4.19.0.0 && < 4.21
+    , containers >= 0.6.8    && < 0.8
+    , ghc        >= 9.8.1    && < 9.11
     , safe       >= 0.3.19   && < 0.4
 
 common warnings
