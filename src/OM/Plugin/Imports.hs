@@ -203,16 +203,16 @@ renderNewImports flags used =
             "import " <> shown name <> " (" <> showParents parents <> ")"
           Qualified { name } ->
             "import qualified " <> shown name
-            <> showListIfAmbiguous name parents
+            <> maybeShowList name parents
           QualifiedAs { name, as } ->
             "import qualified "
             <> shown name <> " as " <> shown as
-            <> showListIfAmbiguous as parents
+            <> maybeShowList as parents
       | (modImport, parents) <- Map.toAscList used
       ]
   where
-    showListIfAmbiguous :: ModuleName -> Map Name (Set Name) -> String
-    showListIfAmbiguous modName parents =
+    maybeShowList :: ModuleName -> Map Name (Set Name) -> String
+    maybeShowList modName parents =
       if modName `member` ambiguousNames
         then " (" <> showParents parents <> ")"
         else ""
