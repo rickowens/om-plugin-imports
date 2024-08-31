@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                om-plugin-imports
-version:             0.3.0.0.9.10
+version:             0.4.0.0.9.10
 synopsis:            Plugin-based explicit import generation.
 description:         See the README at https://github.com/owensmurray/om-plugin-imports/tree/master/#om-plugin-imports
 homepage:            https://github.com/owensmurray/om-plugin-imports
