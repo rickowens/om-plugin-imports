@@ -130,9 +130,9 @@ getUsedImports env = do
                   = is_decl imp
               in
                 ( case (is_qual, is_as == is_mod) of
-                    (True, True) -> Qualified is_mod
-                    (True, False) -> QualifiedAs is_mod is_as
-                    (False, _) -> Unqualified is_mod
+                    (True, True)   -> Qualified is_mod
+                    (True, False)  -> QualifiedAs is_mod is_as
+                    (False, _)     -> Unqualified is_mod
                 , is_mod
                 )
           in
@@ -191,14 +191,14 @@ data ModuleImport
       }
   deriving stock (Eq, Ord)
 
+
 renderNewImports
   :: DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> String
 renderNewImports flags used =
     unlines
-      [
-        case modImport of
+      [ case modImport of
           Unqualified { name } ->
             "import " <> shown name <> " (" <> showParents parents <> ")"
           Qualified { name } ->
@@ -253,3 +253,5 @@ renderNewImports flags used =
         Just c
           | Char.isAlphaNum c || c == '_' -> name
           | otherwise -> "(" <> name <> ")"
+
+
