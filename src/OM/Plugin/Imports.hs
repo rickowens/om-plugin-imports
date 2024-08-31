@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -35,9 +36,10 @@ import GHC.Unit.Module.Imported
   ( ImportedBy(ImportedByUser), ImportedModsVal(imv_all_exports)
   )
 import Prelude
-  ( Applicative(pure), Bool(False, True), Eq((==)), Maybe(Just, Nothing)
-  , Monoid(mempty), Num((+)), Ord((>)), Semigroup((<>)), ($), (.), (<$>), (||)
-  , FilePath, Int, String, concat, otherwise, putStrLn, unlines, writeFile
+  ( Applicative(pure), Bool(False, True), Eq((==)), Foldable(elem)
+  , Maybe(Just, Nothing), Monoid(mempty), Num((+)), Ord((>)), Semigroup((<>))
+  , ($), (.), (<$>), (||), FilePath, Int, String, concat, otherwise, putStrLn
+  , unlines, writeFile
   )
 import Safe (headMay)
 import qualified Data.Char as Char
@@ -53,31 +55,38 @@ plugin = defaultPlugin
   }
 
 
+newtype Options = Options
+  { excessive :: Bool
+  }
+
+
 typeCheckResultActionImpl
   :: [CommandLineOption]
   -> ModSummary
   -> TcGblEnv
   -> TcM TcGblEnv
-typeCheckResultActionImpl _ modSummary env = do
+typeCheckResultActionImpl args modSummary env = do
   liftIO (putStrLn ("Generating imports for file: " <> ms_hspp_file modSummary))
+  let options = parseOptions args
   used <- getUsedImports env
   flags <- getDynFlags
-  void $ writeToDumpFile (ms_hspp_file modSummary) flags used
+  void $ writeToDumpFile options (ms_hspp_file modSummary) flags used
   pure env
 
 
 writeToDumpFile
   :: (MonadIO m)
-  => FilePath
+  => Options
+  -> FilePath
   -> DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> m (Maybe FilePath)
-writeToDumpFile srcFile flags used =
+writeToDumpFile options srcFile flags used =
   liftIO $ do
     let
       filename :: FilePath
       filename = srcFile <> ".full-imports"
-    writeFile filename (renderNewImports flags used)
+    writeFile filename (renderNewImports options flags used)
     pure (Just filename)
 
 
@@ -198,10 +207,11 @@ data ModuleImport
 
 
 renderNewImports
-  :: DynFlags
+  :: Options
+  -> DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> String
-renderNewImports flags used =
+renderNewImports options flags used =
     unlines
       [ case modImport of
           Unqualified { name } ->
@@ -221,7 +231,7 @@ renderNewImports flags used =
   where
     maybeShowList :: ModuleName -> Map Name (Set Name) -> String
     maybeShowList modName parents =
-      if modName `member` ambiguousNames
+      if options.excessive || modName `member` ambiguousNames
         then " (" <> showParents parents <> ")"
         else ""
 
@@ -262,5 +272,12 @@ renderNewImports flags used =
         Just c
           | Char.isAlphaNum c || c == '_' -> name
           | otherwise -> "(" <> name <> ")"
+
+
+parseOptions :: [CommandLineOption] -> Options
+parseOptions args =
+  Options
+    { excessive = "excessive" `elem` args
+    }
 
 

@@ -7,6 +7,7 @@ then the dump file will be `src/Foo/Bar.hs.full-imports`.  The file will
 contain a set of imports which can be copy/pasted over the imports in
 your module in a way that satisfies `-Wmissing-import-lists`.
 
+## Motivation
 
 This is _almost_ what `-ddump-minimal-imports` does, but
 `-ddump-minimal-imports` has the following deficiencies:
@@ -22,4 +23,11 @@ This is _almost_ what `-ddump-minimal-imports` does, but
   ```
   import qualified Foo as F (foo, bar, baz)
   ```
+
+## Options
+
+The plugin supports the following option:
+
+* `excessive`: Output the import list even on unambiguous qualified imports.
+
 
