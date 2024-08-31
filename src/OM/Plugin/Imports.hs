@@ -179,9 +179,16 @@ getUsedImports env = do
 
 
 data ModuleImport
-  = Unqualified ModuleName
-  | Qualified ModuleName
-  | QualifiedAs ModuleName ModuleName
+  = Unqualified
+      { name :: ModuleName
+      }
+  | Qualified
+      { name :: ModuleName
+      }
+  | QualifiedAs
+      { name :: ModuleName
+      ,   as :: ModuleName
+      }
   deriving stock (Eq, Ord)
 
 renderNewImports
@@ -192,15 +199,15 @@ renderNewImports flags used =
     unlines
       [
         case modImport of
-          Unqualified modName ->
-            "import " <> shown modName <> " (" <> showParents parents <> ")"
-          Qualified modName ->
-            "import qualified " <> shown modName
-            <> showListIfAmbiguous modName parents
-          QualifiedAs modName asName ->
+          Unqualified { name } ->
+            "import " <> shown name <> " (" <> showParents parents <> ")"
+          Qualified { name } ->
+            "import qualified " <> shown name
+            <> showListIfAmbiguous name parents
+          QualifiedAs { name, as } ->
             "import qualified "
-            <> shown modName <> " as " <> shown asName
-            <> showListIfAmbiguous asName parents
+            <> shown name <> " as " <> shown as
+            <> showListIfAmbiguous as parents
       | (modImport, parents) <- Map.toAscList used
       ]
   where
@@ -216,9 +223,9 @@ renderNewImports flags used =
       . Map.filter (> 1)
       . Map.unionsWith (+)
       $ [ case modImport of
-            Unqualified name -> Map.singleton name (1 :: Int)
-            Qualified name -> Map.singleton name 1
-            QualifiedAs _ name -> Map.singleton name 1
+            Unqualified { name } -> Map.singleton name (1 :: Int)
+            Qualified { name } -> Map.singleton name 1
+            QualifiedAs { as } -> Map.singleton as 1
         | (modImport, _) <- Map.toAscList used
         ]
 
