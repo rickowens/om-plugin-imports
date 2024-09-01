@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -34,9 +35,10 @@ import GHC.Unit.Module.Imported
   ( ImportedBy(ImportedByUser), ImportedModsVal(imv_all_exports)
   )
 import Prelude
-  ( Applicative(pure), Bool(False, True), Eq((==)), Maybe(Just, Nothing)
-  , Monoid(mempty), Num((+)), Ord((>)), Semigroup((<>)), ($), (.), (<$>), (||)
-  , FilePath, Int, String, concat, otherwise, putStrLn, unlines, writeFile
+  ( Applicative(pure), Bool(False, True), Eq((==)), Foldable(elem)
+  , Maybe(Just, Nothing), Monoid(mempty), Num((+)), Ord((>)), Semigroup((<>))
+  , ($), (.), (<$>), (||), FilePath, Int, String, concat, otherwise, putStrLn
+  , unlines, writeFile
   )
 import Safe (headMay)
 import qualified Data.Char as Char
@@ -51,31 +53,38 @@ plugin = defaultPlugin
   }
 
 
+newtype Options = Options
+  { excessive :: Bool
+  }
+
+
 typeCheckResultActionImpl
   :: [CommandLineOption]
   -> ModSummary
   -> TcGblEnv
   -> TcM TcGblEnv
-typeCheckResultActionImpl _ modSummary env = do
+typeCheckResultActionImpl args modSummary env = do
   liftIO (putStrLn ("Generating imports for file: " <> ms_hspp_file modSummary))
+  let options = parseOptions args
   used <- getUsedImports env
   flags <- getDynFlags
-  void $ writeToDumpFile (ms_hspp_file modSummary) flags used
+  void $ writeToDumpFile options (ms_hspp_file modSummary) flags used
   pure env
 
 
 writeToDumpFile
   :: (MonadIO m)
-  => FilePath
+  => Options
+  -> FilePath
   -> DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> m (Maybe FilePath)
-writeToDumpFile srcFile flags used =
+writeToDumpFile options srcFile flags used =
   liftIO $ do
     let
       filename :: FilePath
       filename = srcFile <> ".full-imports"
-    writeFile filename (renderNewImports flags used)
+    writeFile filename (renderNewImports options flags used)
     pure (Just filename)
 
 
@@ -123,9 +132,10 @@ getUsedImports env = do
                 ImpDeclSpec { is_mod , is_as , is_qual } = is_decl imp
               in
                 ( case (is_qual, is_as == is_mod) of
-                    (True, True) -> Qualified is_mod
-                    (True, False) -> QualifiedAs is_mod is_as
-                    (False, _) -> Unqualified is_mod
+                    (True, True)   -> Qualified is_mod
+                    (True, False)  -> QualifiedAs is_mod is_as
+                    (False, True)  -> Unqualified is_mod
+                    (False, False) -> UnqualifiedAs is_mod is_as
                 , is_mod
                 )
           in
@@ -172,34 +182,49 @@ getUsedImports env = do
 
 
 data ModuleImport
-  = Unqualified ModuleName
-  | Qualified ModuleName
-  | QualifiedAs ModuleName ModuleName
+  = Unqualified
+      { name :: ModuleName
+      }
+  | UnqualifiedAs
+      { name :: ModuleName
+      , as :: ModuleName
+      }
+  | Qualified
+      { name :: ModuleName
+      }
+  | QualifiedAs
+      { name :: ModuleName
+      ,   as :: ModuleName
+      }
   deriving stock (Eq, Ord)
 
+
 renderNewImports
-  :: DynFlags
+  :: Options
+  -> DynFlags
   -> Map ModuleImport (Map Name (Set Name))
   -> String
-renderNewImports flags used =
+renderNewImports options flags used =
     unlines
-      [
-        case modImport of
-          Unqualified modName ->
-            "import " <> shown modName <> " (" <> showParents parents <> ")"
-          Qualified modName ->
-            "import qualified " <> shown modName
-            <> showListIfAmbiguous modName parents
-          QualifiedAs modName asName ->
+      [ case modImport of
+          Unqualified { name } ->
+            "import " <> shown name <> " (" <> showParents parents <> ")"
+          UnqualifiedAs { name, as } ->
+            "import " <> shown name <> " as "
+            <> shown as <> " (" <> showParents parents <> ")"
+          Qualified { name } ->
+            "import qualified " <> shown name
+            <> maybeShowList name parents
+          QualifiedAs { name, as } ->
             "import qualified "
-            <> shown modName <> " as " <> shown asName
-            <> showListIfAmbiguous asName parents
+            <> shown name <> " as " <> shown as
+            <> maybeShowList as parents
       | (modImport, parents) <- Map.toAscList used
       ]
   where
-    showListIfAmbiguous :: ModuleName -> Map Name (Set Name) -> String
-    showListIfAmbiguous modName parents =
-      if modName `member` ambiguousNames
+    maybeShowList :: ModuleName -> Map Name (Set Name) -> String
+    maybeShowList modName parents =
+      if options.excessive || modName `member` ambiguousNames
         then " (" <> showParents parents <> ")"
         else ""
 
@@ -209,9 +234,10 @@ renderNewImports flags used =
       . Map.filter (> 1)
       . Map.unionsWith (+)
       $ [ case modImport of
-            Unqualified name -> Map.singleton name (1 :: Int)
-            Qualified name -> Map.singleton name 1
-            QualifiedAs _ name -> Map.singleton name 1
+            Unqualified { name } -> Map.singleton name (1 :: Int)
+            UnqualifiedAs {as} -> Map.singleton as 1
+            Qualified { name } -> Map.singleton name 1
+            QualifiedAs { as } -> Map.singleton as 1
         | (modImport, _) <- Map.toAscList used
         ]
 
@@ -239,3 +265,12 @@ renderNewImports flags used =
         Just c
           | Char.isAlphaNum c || c == '_' -> name
           | otherwise -> "(" <> name <> ")"
+
+
+parseOptions :: [CommandLineOption] -> Options
+parseOptions args =
+  Options
+    { excessive = "excessive" `elem` args
+    }
+
+
